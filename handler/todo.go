@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -66,7 +67,7 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		//r.Context()を呼びだして、リクエストのコンテキストを取得
+		//r.Context()を呼びだして、リクエストのコンテキストを取得（コンテキストを取得して使用することで処理の中断ができるようになる？）
 		ctx := r.Context()
 		// CreateTODOメソッドを呼び出してDBに保存
 		todo, err := h.svc.CreateTODO(ctx, req.Subject, req.Description)
@@ -84,6 +85,7 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//HTTPレスポンスのヘッダーにContent-Typeを設定するのはクライアントがレスポンスを正しく解釈できるようにするため
 		//JSON形式のデータを送信する場合、Content-Typeを"application/json"に設定するのが一般的
 		w.Header().Set("Content-Type", "application/json")
+
 		// 成功時のステータスコードを200 OKに設定
 		w.WriteHeader(http.StatusOK)
 
@@ -92,6 +94,55 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		return
+	}
+
+	//HTTPメソッドがPutの場合を判定
+	if r.Method == http.MethodPut {
+		//UpdateTODORequestにJSON Decodeを行う
+		var req model.UpdateTODORequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// デコードエラーの場合、400 Bad Request を返す
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		//idが0の場合をif文で判定し、0の場合は400 BadrequestとしてHTTPResponseを返す
+		if req.ID == 0 {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		//subjectが空文字列の場合をif文で判定し、からの場合は400 BadRequestとしてHTTPResponseを返す
+		if req.Subject == "" {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		//r.Context()を呼びだして、リクエストのコンテキストを取得（コンテキストを取得して使用することで処理の中断ができるようになる？）
+		ctx := r.Context()
+		//UpdateTODOメソッドを呼び出してDBに保存(UpdateTODOでは、対象のTODOが存在しない場合にErrorNotFoundが返される)
+		updateTodo, err := h.svc.UpdateTODO(ctx, req.ID, req.Subject, req.Description)
+		if err != nil {
+			// ErrNotFoundの場合は404 NotFoundを返す
+			if errors.Is(err, &model.ErrNotFound{}) {
+				http.Error(w, "404 Not Found", http.StatusNotFound)
+				return
+			}
+		}
+
+		// 更新されたTODOをレスポンスとして返す
+		resp := &model.UpdateTODOResponse{TODO: *updateTodo}
+
+		// JSON Encodeを行いHTTP Responseを返す
+		w.Header().Set("Content-Type", "application/json")
+
+		// 成功時のステータスコードを200 OKに設定
+		w.WriteHeader(http.StatusOK)
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	err := json.NewEncoder(w).Encode(response)

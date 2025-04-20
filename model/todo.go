@@ -5,7 +5,7 @@ import "time"
 type (
 	// A TODO expresses ...
 	TODO struct {
-		ID          int       `json:"id"`
+		ID          int64     `json:"id"`
 		Subject     string    `json:"subject"`
 		Description string    `json:"description"`
 		CreatedAt   time.Time `json:"created_at"` //time.Time型（日付型）は時間を表す型
@@ -29,7 +29,7 @@ type (
 
 	// A UpdateTODORequest expresses ...
 	UpdateTODORequest struct {
-		ID          int    `json:"id"`
+		ID          int64  `json:"id"`
 		Subject     string `json:"subject"`
 		Description string `json:"description"`
 	}
